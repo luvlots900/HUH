@@ -1006,9 +1006,12 @@
 
     <button id="burgerMenu" type="button">☰</button>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
       window.APP_DB_CONFIG = {
-        provider: 'localStorage',
+        provider: 'supabase',
+        supabaseUrl: 'https://tjuxguslvoslvbvuwsxl.supabase.co',
+        supabaseAnonKey: 'sb_publishable_yYBV033eY45Ipcv7UyxULg_a6VCeTqe',
         table: 'class_app'
       };
     </script>
@@ -1037,23 +1040,53 @@
         currentView: 'dashboard',
         selectedSubjectId: null,
         subjectScheduleDraft: [],
-        subjectAccessDraft: []
+        subjectAccessDraft: [],
+        sharedSubjects: {}
       };
 
       function getTeacher() {
-        return JSON.parse(localStorage.getItem(STORAGE_KEYS.teacher) || 'null') || defaultTeacher;
+        return state.currentTeacher || defaultTeacher;
       }
 
       function saveTeacher(data) {
+        state.currentTeacher = data;
+        if (window.CASSY_DB && (window.APP_DB_CONFIG || {}).provider === 'supabase') {
+          window.CASSY_DB.saveTeacher(data);
+          return;
+        }
         localStorage.setItem(STORAGE_KEYS.teacher, JSON.stringify(data));
       }
 
       function getSubjects() {
+        if (Object.keys(state.sharedSubjects || {}).length) {
+          return state.sharedSubjects;
+        }
         return JSON.parse(localStorage.getItem(STORAGE_KEYS.subjects) || '{}');
       }
 
       function saveSubjects(data) {
-        localStorage.setItem(STORAGE_KEYS.subjects, JSON.stringify(data));
+        state.sharedSubjects = data || {};
+        if (window.CASSY_DB && (window.APP_DB_CONFIG || {}).provider === 'supabase') {
+          window.CASSY_DB.saveSubjects(data || {});
+          return;
+        }
+        localStorage.setItem(STORAGE_KEYS.subjects, JSON.stringify(data || {}));
+      }
+
+      async function hydrateSharedState() {
+        const config = window.APP_DB_CONFIG || {};
+        if (config.provider === 'supabase' && window.CASSY_DB) {
+          try {
+            state.currentTeacher = await window.CASSY_DB.getTeacher();
+            state.sharedSubjects = await window.CASSY_DB.getSubjects();
+            return;
+          } catch (error) {
+            console.warn('Supabase hydration failed, falling back to local storage.', error);
+          }
+        }
+
+        state.currentTeacher = JSON.parse(localStorage.getItem(STORAGE_KEYS.teacher) || 'null') || defaultTeacher;
+        state.sharedSubjects = JSON.parse(localStorage.getItem(STORAGE_KEYS.subjects) || '{}');
       }
 
       function escapeHtml(value) {
